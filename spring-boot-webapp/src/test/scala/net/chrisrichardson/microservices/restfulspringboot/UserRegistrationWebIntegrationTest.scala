@@ -1,19 +1,17 @@
 package net.chrisrichardson.microservices.restfulspringboot
 
-import java.util.concurrent.TimeUnit
-
 import org.junit.runner.RunWith
-import org.scalatest.{BeforeAndAfterAll, FlatSpec}
-import org.scalatest.selenium.Firefox
-import org.scalatest.junit.JUnitRunner
-import org.springframework.boot.SpringApplication
 import org.scalatest.Matchers._
-import scala.collection.JavaConversions._
 import org.scalatest.concurrent.Eventually._
+import org.scalatest.junit.JUnitRunner
+import org.scalatest.selenium.Chrome
+import org.scalatest.{BeforeAndAfterAll, FlatSpec}
+import org.springframework.boot.SpringApplication
+
 import scala.concurrent.duration._
 
 @RunWith(classOf[JUnitRunner])
-class UserRegistrationWebIntegrationTest extends FlatSpec with Firefox with BeforeAndAfterAll with MyPages {
+class UserRegistrationWebIntegrationTest extends FlatSpec with Chrome with BeforeAndAfterAll with MyPages {
 
   override def beforeAll {
     val sa = new SpringApplication(classOf[UserRegistrationTestConfiguration])

@@ -2,46 +2,36 @@
 
 set -e
 
-if [ -z "$DOCKER_HOST_IP" ] ; then
-  if which docker-machine >/dev/null; then
-    export DOCKER_HOST_IP=$(docker-machine ip default)
-  else
-    export DOCKER_HOST_IP=localhost
- fi
- echo set DOCKER_HOST_IP $DOCKER_HOST_IP
-fi
+. ./set-env.sh
+docker-compose stop
+docker-compose rm -v --force
 
-docker-compose up -d --no-recreate rabbitmq mongodb
+docker-compose up -d rabbitmq mongodb
+
+cd eureka-server
+./gradlew build
+
+cd ../zipkin-server
+./gradlew build
+
+cd ..
 
 cd spring-boot-restful-service
-
-export SPRING_RABBITMQ_HOST=${DOCKER_HOST_IP?}
-export SPRING_DATA_MONGODB_URI=mongodb://${DOCKER_HOST_IP?}/userregistration
 
 ./gradlew build
 
 cd ..
 
-docker-compose up -d --no-deps restfulservice
+docker-compose up -d restfulservice
 
 echo -n waiting for restfulservice to start..
 
-set +e
 
 echo Launching RESTful service in Docker container
 echo This takes about 30 seconds...
 
-while [[ true ]]; do
-        nc -z -w 4 ${DOCKER_HOST_IP?} 8081
-        if [[ "$?" -eq "0" ]]; then
-                echo connected
-                break
-        fi
-        echo -n .
-        sleep 1
-done
-
-set -e
+./wait-for-services.sh ${DOCKER_HOST_IP?} /health 8081
+./wait-for-services.sh ${DOCKER_HOST_IP?} /eureka/apps/REGISTRATION-SERVICE 8761
 
 cd spring-boot-webapp
 
@@ -49,29 +39,5 @@ export USER_REGISTRATION_URL=http://${DOCKER_HOST_IP?}:8081/user
 
 ./gradlew build
 
-cd ..
-
-set +e
-
-echo Launching web app in Docker container
-echo This takes about 30 seconds...
-
-docker-compose up -d --no-deps web
-
-while [[ true ]]; do
-        nc -z -w 4 ${DOCKER_HOST_IP?} 8080
-        if [[ "$?" -eq "0" ]]; then
-                echo connected
-                break
-        fi
-        echo -n .
-        sleep 1
-done
-
-set -e
-
-echo The microservices are running
-echo You can visit these URLS
-echo http://${DOCKER_HOST_IP?}:8080/register.html - registration
-echo http://${DOCKER_HOST_IP?}:8761 - Eureka console
-echo http://${DOCKER_HOST_IP?}:8081/swagger-ui.html - the Swagger UI
+docker-compose stop
+docker-compose rm -v --force

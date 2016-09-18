@@ -1,19 +1,24 @@
 package net.chrisrichardson.microservices.restfulspringboot
 
-import net.chrisrichardson.microservices.restfulspringboot.backend.ScalaObjectMapper
+import com.netflix.discovery.EurekaClient
+import net.chrisrichardson.microservices.restfulspringboot.backend.{DiscoveryHealthIndicator, ScalaObjectMapper}
 import net.chrisrichardson.microservices.restfulspringboot.dustview.DustViewResolver
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration
+import org.springframework.boot.actuate.health.HealthIndicator
+import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.cloud.client.circuitbreaker.EnableCircuitBreaker
+import org.springframework.cloud.client.loadbalancer.LoadBalanced
 import org.springframework.cloud.netflix.eureka.EnableEurekaClient
 import org.springframework.context.annotation._
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
 import org.springframework.web.client.RestTemplate
+import org.springframework.cloud.sleuth.sampler.AlwaysSampler
+import org.springframework.cloud.sleuth.Sampler
 
 import scala.collection.JavaConversions._
 
-@Configuration
-@EnableAutoConfiguration
-@ComponentScan
-@Import(Array(classOf[EurekaClientConfiguration]))
+@SpringBootApplication
+@Import(Array(classOf[EurekaClientConfiguration], classOf[NonEurekaClientConfiguration]))
+@EnableCircuitBreaker
 class UserRegistrationConfiguration {
 
 
@@ -29,22 +34,26 @@ class UserRegistrationConfiguration {
     resolver
   }
 
-  class DummyClass {}
+  @Bean
+  def sampler() : Sampler = new AlwaysSampler()
+  
+
+}
+
+@Configuration
+@Profile(Array("!enableEureka"))
+class NonEurekaClientConfiguration {
 
   @Bean
-  @Profile(Array("!enableEureka"))
-  def restTemplate() = new RestTemplate()
-
-  @Bean
-  def restTemplateInitializer(restTemplate : RestTemplate) : DummyClass = {
+  def restTemplate(scalaObjectMapper : ScalaObjectMapper) : RestTemplate = {
+    val restTemplate = new RestTemplate()
     restTemplate.getMessageConverters foreach {
       case mc: MappingJackson2HttpMessageConverter =>
-        mc.setObjectMapper(scalaObjectMapper())
+        mc.setObjectMapper(scalaObjectMapper)
       case _ =>
     }
-    new DummyClass()
+    restTemplate
   }
-
 }
 
 @Configuration
@@ -52,5 +61,18 @@ class UserRegistrationConfiguration {
 @Profile(Array("enableEureka"))
 class EurekaClientConfiguration {
 
-}
+  @Bean
+  @LoadBalanced
+  def restTemplate(scalaObjectMapper : ScalaObjectMapper) : RestTemplate = {
+    val restTemplate = new RestTemplate()
+    restTemplate.getMessageConverters foreach {
+      case mc: MappingJackson2HttpMessageConverter =>
+        mc.setObjectMapper(scalaObjectMapper)
+      case _ =>
+    }
+    restTemplate
+  }
 
+  @Bean
+  def discoveryHealthIndicator(discoveryClient : EurekaClient ) : HealthIndicator = new DiscoveryHealthIndicator(discoveryClient)
+}
